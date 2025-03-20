@@ -1,5 +1,27 @@
-import os
-os.system('pip install torch torchvision pillow numpy scikit-learn streamlit')
+import subprocess
+import sys
+
+# Install torch and torchvision if not installed
+def install_libraries():
+    try:
+        import torch
+        import torchvision
+    except ImportError:
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'torch', 'torchvision'])
+        print("Torch and Torchvision installed successfully.")
+    else:
+        print("Torch and Torchvision are already installed.")
+
+install_libraries()
+
+# Continue with your imports
+import torch
+import torchvision.transforms as transforms
+from torchvision import models
+from PIL import Image
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+
 
 import streamlit as st
 import torch
