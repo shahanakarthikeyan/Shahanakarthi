@@ -1,27 +1,20 @@
+import os
 import subprocess
 import sys
 
-# Install torch and torchvision if not installed
+# Install necessary libraries if not installed
 def install_libraries():
     try:
         import torch
         import torchvision
+        import numpy as np
+        from PIL import Image
+        from sklearn.metrics.pairwise import cosine_similarity
     except ImportError:
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'torch', 'torchvision'])
-        print("Torch and Torchvision installed successfully.")
-    else:
-        print("Torch and Torchvision are already installed.")
+        print("Installing missing libraries...")
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'torch', 'torchvision', 'numpy', 'Pillow', 'scikit-learn', 'streamlit'])
 
 install_libraries()
-
-# Continue with your imports
-import torch
-import torchvision.transforms as transforms
-from torchvision import models
-from PIL import Image
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-
 
 import streamlit as st
 import torch
@@ -32,12 +25,15 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 # Load Pretrained Model (ResNet50)
-@st.cache_resource
 def load_model():
-    model = models.resnet50(weights='ResNet50_Weights.DEFAULT')
-    model = torch.nn.Sequential(*list(model.children())[:-1])  # Remove classification layer
-    model.eval()
-    return model
+    try:
+        model = models.resnet50(pretrained=True)
+        model = torch.nn.Sequential(*list(model.children())[:-1])  # Remove classification layer
+        model.eval()
+        return model
+    except Exception as e:
+        st.error(f"Error loading model: {e}")
+        return None
 
 model = load_model()
 
@@ -52,22 +48,20 @@ transform = transforms.Compose([
 def extract_features(image):
     try:
         image = image.convert('RGB')
-        image = transform(image).unsqueeze(0)  # Add batch dimension
+        image = transform(image).unsqueeze(0)
         with torch.no_grad():
             features = model(image)
-        return features.squeeze().numpy().flatten().astype(np.float32)
+        return features.squeeze().numpy().flatten()
     except Exception as e:
         st.error(f"Error extracting features: {e}")
         return None
 
+# Compute Similarity
 def compute_similarity(img1, img2):
     feat1 = extract_features(img1)
     feat2 = extract_features(img2)
-    
     if feat1 is None or feat2 is None:
-        return None
-
-    # Compute Cosine Similarity
+        return 0.0
     similarity = cosine_similarity([feat1], [feat2])[0][0]
     similarity_percentage = round(similarity * 100, 2)
     return similarity_percentage
@@ -87,9 +81,5 @@ if uploaded_file1 and uploaded_files2:
     st.image(images2, caption=[f"Generated Image {i+1}" for i in range(len(images2))], width=300)
 
     for i, img2 in enumerate(images2):
-        with st.spinner(f"Calculating similarity for Image {i+1}..."):
-            similarity_score = compute_similarity(image1, img2)
-            if similarity_score is not None:
-                st.write(f"**Similarity Score for Image {i+1}:** {similarity_score}%")
-            else:
-                st.write(f"**Failed to calculate similarity for Image {i+1}**")
+        similarity_score = compute_similarity(image1, img2)
+        st.write(f"**Similarity Score for Image {i+1}:** {similarity_score}%")
