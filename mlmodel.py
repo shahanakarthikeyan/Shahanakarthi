@@ -1,6 +1,5 @@
 import os
-os.system('pip install torch torchvision')
-
+os.system('pip install torch torchvision pillow numpy scikit-learn streamlit')
 
 import streamlit as st
 import torch
@@ -11,9 +10,14 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 # Load Pretrained Model (ResNet50)
-model = models.resnet50(pretrained=True)
-model = torch.nn.Sequential(*list(model.children())[:-1])  # Remove classification layer
-model.eval()
+@st.cache_resource
+def load_model():
+    model = models.resnet50(weights='ResNet50_Weights.DEFAULT')
+    model = torch.nn.Sequential(*list(model.children())[:-1])  # Remove classification layer
+    model.eval()
+    return model
+
+model = load_model()
 
 # Define Image Transformation
 transform = transforms.Compose([
@@ -24,20 +28,25 @@ transform = transforms.Compose([
 
 # Extract Feature Vector
 def extract_features(image):
-    image = image.convert('RGB')
-    image = transform(image).unsqueeze(0)  # Add batch dimension
-    with torch.no_grad():
-        features = model(image)
-    return features.squeeze().numpy().flatten()
+    try:
+        image = image.convert('RGB')
+        image = transform(image).unsqueeze(0)  # Add batch dimension
+        with torch.no_grad():
+            features = model(image)
+        return features.squeeze().numpy().flatten().astype(np.float32)
+    except Exception as e:
+        st.error(f"Error extracting features: {e}")
+        return None
 
 def compute_similarity(img1, img2):
     feat1 = extract_features(img1)
     feat2 = extract_features(img2)
     
+    if feat1 is None or feat2 is None:
+        return None
+
     # Compute Cosine Similarity
     similarity = cosine_similarity([feat1], [feat2])[0][0]
-    
-    # Convert to Percentage (0% - 100%)
     similarity_percentage = round(similarity * 100, 2)
     return similarity_percentage
 
@@ -56,5 +65,9 @@ if uploaded_file1 and uploaded_files2:
     st.image(images2, caption=[f"Generated Image {i+1}" for i in range(len(images2))], width=300)
 
     for i, img2 in enumerate(images2):
-        similarity_score = compute_similarity(image1, img2)
-        st.write(f"**Similarity Score for Image {i+1}:** {similarity_score}%")
+        with st.spinner(f"Calculating similarity for Image {i+1}..."):
+            similarity_score = compute_similarity(image1, img2)
+            if similarity_score is not None:
+                st.write(f"**Similarity Score for Image {i+1}:** {similarity_score}%")
+            else:
+                st.write(f"**Failed to calculate similarity for Image {i+1}**")
