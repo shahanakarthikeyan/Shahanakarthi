@@ -1,4 +1,6 @@
-!pip install torch torchvision
+import os
+os.system('pip install torch torchvision')
+
 
 import streamlit as st
 import torch
